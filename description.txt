@@ -1,0 +1,100 @@
+Нужно написать мигратор.
+Это консольное приложение.
+Запускает бесконечный цикл.
+1) На весь цикл глобальный try catch
+2) Если ошибка - пишем в лог. После ошибки следующее выполнение, как обычно
+3) Цикл запускаем каждые 5 минут. Если ошибка - то следующее выполнение, через 5 минут
+4) Все подключения храним в конфиге
+5) АпиТаблица - это таблица в БД апи interview_training_interview имя additional_user_infos
+public class AdditionalUserInfo
+{
+    public Guid Id { get; set; }
+    public DateTime CreatedUtc { get; set; }
+    public DateTime? ModifiedUtc { get; set; }
+	public bool IsDeleted { get; set; }
+    public string IdentityUserId { get; set; }
+    public bool IsCandidate { get; set; }
+    public bool IsExpert { get; set; }
+}
+5) ИдентитиТаблицаЮзер - это таблица в БД апи sevsharks_interview_auth имя Users
+public class Users
+{
+	public string Id { get; set;}
+}
+
+5) ИдентитиТаблицаРоль - это таблица в БД апи sevsharks_interview_auth имя Roles
+public class Role
+{
+	public string Id { get; set; }
+	public string Name { get; set; }
+}
+
+5) ИдентитиТаблицаРольЮзер - это таблица в БД апи sevsharks_interview_auth имя UserRoles
+public class Role
+{
+	public string UserId { get; set; }
+	public string RoleId { get; set; }
+}
+
+Подключение делаем через Dapper. База данных postgres
+
+В цикле он:
+1) Подключается к БД IdentityServer:
+  "ConnectionStrings": {
+    "IdentityServerConnection": "Host=localhost;Port=5432;Database=sevsharks_interview_auth;UserId=postgres;Password=password"
+  },
+У IdentityServer записи только на чтение.
+Стандартная обратока ошибок
+
+2)
+Далее он подключается к апи БД:
+  "ConnectionStrings": {
+    "InterviewTrainingConnection": "Host=localhost;Port=5432;Database=interview_training_interview;UserId=postgres;Password=password"
+  },
+У апи он имеет право на чтение, запись, редактирование, удаление
+Стандартная обработка ошиибок
+
+3) Делаем выборку из IdentityServer БД
+SELECT u."Id", r."Name" FROM public."Users" u
+INNER JOIN public."UserRoles"  ur ON ur."UserId" = u."Id"
+INNER JOIN public."Roles" r ON r."Id" = ur."RoleId"
+
+3.1) Если записей нет - тогда помечаем все записи в АпиТаблица is_deleted = true
+
+3.2) Результат выборки преобразовать в Dictionary. Key по Users.Id на сервере. Value = r."Name". Чтобы для одного Users.Id было множество ролей. Ролей может быть 0, 1, или больше одной 2, 3
+
+3.3) Для каждой записи из словаря проходим и делаем следующее
+	3.2.1) Если в АпиТаблица если запись по полю IdentityUserId - тогда делаем обновление.
+	IsCandidate = true если в словаре по ключю если Роль Candidate иначе false
+	IsExpert = true если в словаре по ключю если Роль Expert  иначе false
+update public."additional_user_infos"
+set 
+	is_candidate = IsCandidate
+	,is_expert = IsExpert
+where identity_user_id = КлючИЗСловаря
+	3.2.1) Если в АпиТаблица нет записи по полю IdentityUserId - тогда делаем добавление.
+
+поле	Тип	Комментарий
+id	uuid	Уникальный идентификатор
+identity_user_id	character varying(450)	Идентификатор пользователя в Identity
+full_name	character varying(500) NULL	Полное имя пользователя
+photo	character varying(2000) NULL	URL фото пользователя
+short_description	character varying(500) NULL	Краткое описание
+description	character varying(4000) NULL	Полное описание
+interview_schedule_at_any_time	boolean	Готов проводить интервью в любое время
+is_candidate	boolean	Признак кандидата
+is_expert	boolean	Признак эксперта
+created_utc	timestamp	Дата и время создания записи в таблице
+modified_utc	timestamp NULL	Дата и время последнего изменения записи в таблице
+is_deleted	boolean	Признак удалена запись или нет
+
+id = новое поле уникальный Guid.NewGuid()
+identity_user_id = идентификатор из ключа из словаря
+is_candidate = true если в словаре по ключю если Роль Candidate иначе false
+is_expert = true если в словаре по ключю если Роль Expert  иначе false
+created_utc = текущая дата и время по Utc
+modified_utc = текущая дата и время по Utc
+is_deleted = false
+
+4) Если у нас есть записи из пункта 3) тогда
+Делаем выборку из АпиТаблица. Если у нас есть записи по identity_user_id для которых нету записей в выборке из пункта 3, то помечаем эти записи is_deleted = true
