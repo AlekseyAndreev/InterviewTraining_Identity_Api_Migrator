@@ -43,8 +43,8 @@ public class MigrationService : IMigrationService
 
             var userRoles = await identityConnection.QueryAsync<UserRoleDto>(
                 @"SELECT u.""Id"", r.""Name"" FROM public.""Users"" u
-                  INNER JOIN public.""UserRoles"" ur ON ur.""UserId"" = u.""Id""
-                  INNER JOIN public.""Roles"" r ON r.""Id"" = ur.""RoleId""");
+                  LEFT JOIN public.""UserRoles"" ur ON ur.""UserId"" = u.""Id""
+                  LEFT JOIN public.""Roles"" r ON r.""Id"" = ur.""RoleId""");
 
             userRolesDict = new Dictionary<string, HashSet<string>>();
             foreach (var ur in userRoles)
@@ -150,8 +150,8 @@ public class MigrationService : IMigrationService
         _logger.LogDebug("Добавление новой записи для IdentityUserId: {UserId}", userId);
         await trainingConnection.ExecuteAsync(
             @"INSERT INTO public.additional_user_infos 
-                          (id, identity_user_id, is_candidate, is_expert, created_utc, modified_utc, is_deleted)
-                          VALUES (@Id, @IdentityUserId, @IsCandidate, @IsExpert, @CreatedUtc, @ModifiedUtc, @IsDeleted)",
+                          (id, identity_user_id, is_candidate, is_expert, created_utc, modified_utc, is_deleted, time_zone_id)
+                          VALUES (@Id, @IdentityUserId, @IsCandidate, @IsExpert, @CreatedUtc, @ModifiedUtc, @IsDeleted, @TimeZoneId)",
             new
             {
                 Id = Guid.NewGuid(),
@@ -160,7 +160,8 @@ public class MigrationService : IMigrationService
                 IsExpert = isExpert,
                 CreatedUtc = DateTime.UtcNow,
                 ModifiedUtc = DateTime.UtcNow,
-                IsDeleted = false
+                IsDeleted = false,
+                TimeZoneId = Guid.Parse("20000000-0000-0000-0000-000000000089"), // идентификатор в базе - хард код. По умолчанию у всех пользователей, что создаём временная зона это Europe/Moscow
             });
     }
 
