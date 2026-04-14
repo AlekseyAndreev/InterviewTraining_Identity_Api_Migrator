@@ -5,5 +5,5 @@
 /// </summary>
 public class MigrationSettings
 {
-    public int IntervalMinutes { get; set; } = 5;
+    public int IntervalMinutes { get; set; } = 1;
 }
