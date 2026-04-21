@@ -74,7 +74,7 @@ public class MigrationService : IMigrationService
             var existingRecords = await trainingConnection.QueryAsync<AdditionalUserInfo>(
                 @"SELECT id, identity_user_id, 
                          is_candidate, is_expert, is_deleted, modified_utc, created_utc
-                  FROM public.additional_user_infos WHERE is_deleted = false");
+                  FROM public.additional_user_infos");
 
             var existingDict = existingRecords.ToDictionary(r => r.identity_user_id, r => r);
 
@@ -133,8 +133,7 @@ public class MigrationService : IMigrationService
             @"UPDATE public.additional_user_infos 
                           SET is_candidate = @IsCandidate, 
                               is_expert = @IsExpert, 
-                              modified_utc = @ModifiedUtc,
-                              is_deleted = false
+                              modified_utc = @ModifiedUtc
                           WHERE identity_user_id = @IdentityUserId",
             new
             {
