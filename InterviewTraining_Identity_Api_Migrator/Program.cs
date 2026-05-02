@@ -3,6 +3,7 @@ using InterviewTraining_Identity_Api_Migrator.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 
 namespace InterviewTraining_Identity_Api_Migrator;
 
@@ -27,7 +28,10 @@ class Program
             .AddLogging(builder =>
             {
                 builder.AddConfiguration(configuration.GetSection("Logging"));
-                builder.AddConsole();
+                builder.AddConsole(options =>
+                {
+                    options.FormatterName = ConsoleFormatterNames.Json;
+                });
                 builder.SetMinimumLevel(LogLevel.Information);
             })
             .AddSingleton<IMigrationService, MigrationService>()
