@@ -39,7 +39,7 @@ class Program
         // Sink для Elasticsearch
         loggerConfig.WriteTo.Elasticsearch();
 
-        Log.Logger = loggerConfig.CreateLogger();
+        Log.Logger = loggerConfig.ReadFrom.Configuration(configuration).CreateLogger();
 
         // Настройка DI контейнера с Serilog
         var serviceProvider = new ServiceCollection()
