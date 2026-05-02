@@ -3,13 +3,15 @@ using InterviewTraining_Identity_Api_Migrator.Services;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Console;
+using Serilog;
+using Serilog.Formatting.Compact;
+using Elastic.Serilog.Sinks;
 
 namespace InterviewTraining_Identity_Api_Migrator;
 
-/// <summary>
+///<summary>
 /// Мигратор данных между IdentityServer и InterviewTraining API
-/// </summary>
+///</summary>
 class Program
 {
     static async Task Main(string[] args)
@@ -22,17 +24,29 @@ class Program
             .AddEnvironmentVariables()
             .Build();
 
-        // Настройка DI контейнера
+        // Настройка Serilog
+        var loggerConfig = new LoggerConfiguration()
+            .MinimumLevel.Information()
+            .MinimumLevel.Override("Microsoft", Serilog.Events.LogEventLevel.Warning)
+            .MinimumLevel.Override("System", Serilog.Events.LogEventLevel.Warning)
+            .Enrich.FromLogContext()
+            .Enrich.WithMachineName()
+            .Enrich.WithProperty("Application", "InterviewTraining_Identity_Api_Migrator");
+
+        // Sink для консоли в JSON формате
+        loggerConfig.WriteTo.Console(new CompactJsonFormatter());
+
+        // Sink для Elasticsearch
+        loggerConfig.WriteTo.Elasticsearch();
+
+        Log.Logger = loggerConfig.CreateLogger();
+
+        // Настройка DI контейнера с Serilog
         var serviceProvider = new ServiceCollection()
             .AddSingleton<IConfiguration>(configuration)
             .AddLogging(builder =>
             {
-                builder.AddConfiguration(configuration.GetSection("Logging"));
-                builder.AddConsole(options =>
-                {
-                    options.FormatterName = ConsoleFormatterNames.Json;
-                });
-                builder.SetMinimumLevel(LogLevel.Information);
+                builder.AddSerilog(Log.Logger);
             })
             .AddSingleton<IMigrationService, MigrationService>()
             .BuildServiceProvider();
@@ -42,7 +56,8 @@ class Program
         var settings = configuration.GetSection("MigrationSettings").Get<MigrationSettings>() ?? new MigrationSettings();
 
         var interval = TimeSpan.FromMinutes(settings.IntervalMinutes);
-        logger.LogInformation("Мигратор запущен. Интервал: {Interval} минут", settings.IntervalMinutes);
+        logger.LogInformation("Мигратор запущен. Интервал: {Interval} минут", 
+            settings.IntervalMinutes);
 
         using var cts = new CancellationTokenSource();
         // Обработка завершения приложения
@@ -79,5 +94,6 @@ class Program
         }
 
         logger.LogInformation("Мигратор завершен");
+        Log.CloseAndFlush();
     }
 }
