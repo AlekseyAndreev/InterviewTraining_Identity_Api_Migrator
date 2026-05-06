@@ -15,6 +15,7 @@ public class MigrationService : IMigrationService
     private readonly ILogger<MigrationService> _logger;
     private const string RoleCandidate = "Candidate";
     private const string RoleExpert = "Expert";
+    private const string RoleAdmin = "Admin";
 
     public MigrationService(IConfiguration configuration, ILogger<MigrationService> logger)
     {
@@ -73,7 +74,7 @@ public class MigrationService : IMigrationService
 
             var existingRecords = await trainingConnection.QueryAsync<AdditionalUserInfo>(
                 @"SELECT id, identity_user_id, 
-                         is_candidate, is_expert, is_deleted, modified_utc, created_utc
+                         is_candidate, is_expert, is_admin, is_deleted, modified_utc, created_utc
                   FROM public.additional_user_infos");
 
             var existingDict = existingRecords.ToDictionary(r => r.identity_user_id, r => r);
@@ -85,14 +86,15 @@ public class MigrationService : IMigrationService
 
                 var isCandidate = roles.Contains(RoleCandidate);
                 var isExpert = roles.Contains(RoleExpert);
+                var isAdmin = roles.Contains(RoleAdmin);
 
                 if (existingDict.TryGetValue(userId, out var existingRecord))
                 {
-                    await UpdateAdditionalUserInfoRolesAsync(trainingConnection, existingRecord, isCandidate, isExpert, userId);
+                    await UpdateAdditionalUserInfoRolesAsync(trainingConnection, existingRecord, isCandidate, isExpert, isAdmin, userId);
                 }
                 else
                 {
-                    await AddAdditionalUserInfoAsync(trainingConnection, isCandidate, isExpert, userId);
+                    await AddAdditionalUserInfoAsync(trainingConnection, isCandidate, isExpert, isAdmin, userId);
                 }
             }
 
@@ -120,10 +122,10 @@ public class MigrationService : IMigrationService
         }
     }
 
-    private async Task UpdateAdditionalUserInfoRolesAsync(NpgsqlConnection trainingConnection, AdditionalUserInfo existingRecord, bool isCandidate, bool isExpert, string userId)
+    private async Task UpdateAdditionalUserInfoRolesAsync(NpgsqlConnection trainingConnection, AdditionalUserInfo existingRecord, bool isCandidate, bool isExpert, bool isAdmin, string userId)
     {
         _logger.LogDebug("Обновление записи для IdentityUserId: {UserId}", userId);
-        if (existingRecord.is_candidate == isCandidate && existingRecord.is_expert == isExpert)
+        if (existingRecord.is_candidate == isCandidate && existingRecord.is_expert == isExpert && existingRecord.is_admin == isAdmin)
         {
             _logger.LogDebug("Роли совпадают. Обновление не требуется: {UserId}", userId);
             return;
@@ -133,30 +135,33 @@ public class MigrationService : IMigrationService
             @"UPDATE public.additional_user_infos 
                           SET is_candidate = @IsCandidate, 
                               is_expert = @IsExpert, 
+                              is_admin = @IsAdmin, 
                               modified_utc = @ModifiedUtc
                           WHERE identity_user_id = @IdentityUserId",
             new
             {
                 IsCandidate = isCandidate,
                 IsExpert = isExpert,
+                IsAdmin = isAdmin,
                 ModifiedUtc = DateTime.UtcNow,
                 IdentityUserId = userId
             });
     }
 
-    private async Task AddAdditionalUserInfoAsync(NpgsqlConnection trainingConnection, bool isCandidate, bool isExpert, string userId)
+    private async Task AddAdditionalUserInfoAsync(NpgsqlConnection trainingConnection, bool isCandidate, bool isExpert, bool isAdmin, string userId)
     {
         _logger.LogDebug("Добавление новой записи для IdentityUserId: {UserId}", userId);
         await trainingConnection.ExecuteAsync(
             @"INSERT INTO public.additional_user_infos 
-                          (id, identity_user_id, is_candidate, is_expert, created_utc, modified_utc, is_deleted, time_zone_id)
-                          VALUES (@Id, @IdentityUserId, @IsCandidate, @IsExpert, @CreatedUtc, @ModifiedUtc, @IsDeleted, @TimeZoneId)",
+                          (id, identity_user_id, is_candidate, is_expert, is_admin, created_utc, modified_utc, is_deleted, time_zone_id)
+                          VALUES (@Id, @IdentityUserId, @IsCandidate, @IsExpert, @IsAdmin, @CreatedUtc, @ModifiedUtc, @IsDeleted, @TimeZoneId)",
             new
             {
                 Id = Guid.NewGuid(),
                 IdentityUserId = userId,
                 IsCandidate = isCandidate,
                 IsExpert = isExpert,
+                IsAdmin = isAdmin,
                 CreatedUtc = DateTime.UtcNow,
                 ModifiedUtc = DateTime.UtcNow,
                 IsDeleted = false,

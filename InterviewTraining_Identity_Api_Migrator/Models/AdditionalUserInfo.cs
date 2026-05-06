@@ -12,4 +12,5 @@ public class AdditionalUserInfo
     public string identity_user_id { get; set; } = string.Empty;
     public bool is_candidate { get; set; }
     public bool is_expert { get; set; }
+    public bool is_admin { get; set; }
 }
